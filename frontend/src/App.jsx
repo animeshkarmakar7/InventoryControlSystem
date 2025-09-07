@@ -12,117 +12,249 @@ import {
   Plus,
   Eye,
   Brain,
-  Target
+  Target,
+  Edit,
+  Trash2,
+  X,
+  Save
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+
+// API base URL - adjust this to match your backend
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const InventoryManagement = () => {
   const [activeTab, setActiveTab] = useState('inventory');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('2024-09');
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Sample inventory data
-  const [inventoryData] = useState([
-    {
-      id: 1,
-      name: 'Wireless Headphones',
-      sku: 'WH-001',
-      category: 'Electronics',
-      currentStock: 45,
-      minStock: 20,
-      maxStock: 100,
-      price: 99.99,
-      supplier: 'Tech Corp',
-      lastUpdated: '2024-09-05',
-      status: 'In Stock',
-      velocity: 'High',
-      prediction: { nextMonth: 78, confidence: 85 }
+  
+  // Dynamic state for backend data
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState({});
+  const [imoData, setImoData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // Modal states
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showEditProduct, setShowEditProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  
+  // Form state for adding/editing products
+  const [productForm, setProductForm] = useState({
+    name: '',
+    category: '',
+    description: '',
+    currentStock: 0,
+    thresholds: {
+      min: 10,
+      max: 100,
+      reorderPoint: 20,
+      criticalLevel: 5
     },
-    {
-      id: 2,
-      name: 'Gaming Mouse',
-      sku: 'GM-002',
-      category: 'Electronics',
-      currentStock: 12,
-      minStock: 15,
-      maxStock: 80,
-      price: 59.99,
-      supplier: 'Game Tech',
-      lastUpdated: '2024-09-06',
-      status: 'Low Stock',
-      velocity: 'Medium',
-      prediction: { nextMonth: 25, confidence: 78 }
+    price: {
+      cost: 0,
+      selling: 0
     },
-    {
-      id: 3,
-      name: 'Office Chair',
-      sku: 'OC-003',
-      category: 'Furniture',
-      currentStock: 8,
-      minStock: 5,
-      maxStock: 30,
-      price: 299.99,
-      supplier: 'Office Plus',
-      lastUpdated: '2024-09-04',
-      status: 'Critical',
-      velocity: 'Low',
-      prediction: { nextMonth: 15, confidence: 92 }
+    supplier: {
+      name: '',
+      contact: {
+        email: '',
+        phone: ''
+      },
+      leadTime: 7
     },
-    {
-      id: 4,
-      name: 'Bluetooth Speaker',
-      sku: 'BS-004',
-      category: 'Electronics',
-      currentStock: 67,
-      minStock: 25,
-      maxStock: 120,
-      price: 79.99,
-      supplier: 'Audio Co',
-      lastUpdated: '2024-09-06',
-      status: 'In Stock',
-      velocity: 'High',
-      prediction: { nextMonth: 45, confidence: 88 }
-    },
-    {
-      id: 5,
-      name: 'Desk Lamp',
-      sku: 'DL-005',
-      category: 'Furniture',
-      currentStock: 23,
-      minStock: 10,
-      maxStock: 50,
-      price: 49.99,
-      supplier: 'Light Works',
-      lastUpdated: '2024-09-05',
-      status: 'In Stock',
-      velocity: 'Medium',
-      prediction: { nextMonth: 18, confidence: 73 }
+    barcode: '',
+    location: {
+      warehouse: '',
+      shelf: '',
+      bin: ''
     }
-  ]);
+  });
 
-  // Sample prediction data for charts
-  const demandPredictionData = [
-    { month: 'Jan', actual: 65, predicted: 68 },
-    { month: 'Feb', actual: 59, predicted: 62 },
-    { month: 'Mar', actual: 80, predicted: 78 },
-    { month: 'Apr', actual: 81, predicted: 85 },
-    { month: 'May', actual: 56, predicted: 58 },
-    { month: 'Jun', actual: 55, predicted: 52 },
-    { month: 'Jul', actual: 40, predicted: 42 },
-    { month: 'Aug', actual: 65, predicted: 68 },
-    { month: 'Sep', actual: null, predicted: 72 },
-    { month: 'Oct', actual: null, predicted: 78 },
-    { month: 'Nov', actual: null, predicted: 85 },
-    { month: 'Dec', actual: null, predicted: 90 }
-  ];
+  // API functions
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/products`);
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data.products || data);
+      } else {
+        throw new Error('Failed to fetch products');
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setError('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const imoData = [
-    { category: 'Electronics', turnoverRate: 8.2, avgDaysInStock: 45, value: 125000 },
-    { category: 'Furniture', turnoverRate: 3.1, avgDaysInStock: 118, value: 85000 },
-    { category: 'Office Supplies', turnoverRate: 12.5, avgDaysInStock: 29, value: 45000 }
-  ];
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/categories`);
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/analytics/dashboard`);
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardStats(data);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
+  };
+
+  const fetchIMOData = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/analytics/imo-analysis`);
+      if (response.ok) {
+        const data = await response.json();
+        setImoData(data);
+      }
+    } catch (error) {
+      console.error('Error fetching IMO data:', error);
+    }
+  };
+
+  const addProduct = async (productData) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+      
+      if (response.ok) {
+        await fetchProducts();
+        await fetchDashboardStats();
+        setShowAddProduct(false);
+        resetProductForm();
+        setError('');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to add product');
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateProduct = async (productId, productData) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+      
+      if (response.ok) {
+        await fetchProducts();
+        await fetchDashboardStats();
+        setShowEditProduct(false);
+        setEditingProduct(null);
+        resetProductForm();
+        setError('');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update product');
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteProduct = async (productId) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        await fetchProducts();
+        await fetchDashboardStats();
+        setError('');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete product');
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetProductForm = () => {
+    setProductForm({
+      name: '',
+      category: '',
+      description: '',
+      currentStock: 0,
+      thresholds: {
+        min: 10,
+        max: 100,
+        reorderPoint: 20,
+        criticalLevel: 5
+      },
+      price: {
+        cost: 0,
+        selling: 0
+      },
+      supplier: {
+        name: '',
+        contact: {
+          email: '',
+          phone: ''
+        },
+        leadTime: 7
+      },
+      barcode: '',
+      location: {
+        warehouse: '',
+        shelf: '',
+        bin: ''
+      }
+    });
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+    fetchDashboardStats();
+    fetchIMOData();
+  }, []);
+
+  // Helper functions
   const getStatusColor = (status) => {
     switch (status) {
       case 'In Stock': return 'bg-green-100 text-green-800';
@@ -142,10 +274,207 @@ const InventoryManagement = () => {
     }
   };
 
-  const filteredInventory = inventoryData.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name || '',
+      category: product.category?._id || product.category || '',
+      description: product.description || '',
+      currentStock: product.currentStock || 0,
+      thresholds: {
+        min: product.thresholds?.min || 10,
+        max: product.thresholds?.max || 100,
+        reorderPoint: product.thresholds?.reorderPoint || 20,
+        criticalLevel: product.thresholds?.criticalLevel || 5
+      },
+      price: {
+        cost: product.price?.cost || 0,
+        selling: product.price?.selling || 0
+      },
+      supplier: {
+        name: product.supplier?.name || '',
+        contact: {
+          email: product.supplier?.contact?.email || '',
+          phone: product.supplier?.contact?.phone || ''
+        },
+        leadTime: product.supplier?.leadTime || 7
+      },
+      barcode: product.barcode || '',
+      location: {
+        warehouse: product.location?.warehouse || '',
+        shelf: product.location?.shelf || '',
+        bin: product.location?.bin || ''
+      }
+    });
+    setShowEditProduct(true);
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Product Form Component
+  const ProductForm = ({ isEdit = false, onSubmit, onClose }) => (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">
+            {isEdit ? 'Edit Product' : 'Add New Product'}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+        
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(productForm);
+        }} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Product Name *</label>
+              <input
+                type="text"
+                required
+                value={productForm.name}
+                onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Category *</label>
+              <select
+                required
+                value={productForm.category}
+                onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="">Select Category</option>
+                {categories.map(cat => (
+                  <option key={cat._id} value={cat._id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Current Stock *</label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={productForm.currentStock}
+                onChange={(e) => setProductForm({...productForm, currentStock: parseInt(e.target.value) || 0})}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Supplier Name *</label>
+              <input
+                type="text"
+                required
+                value={productForm.supplier.name}
+                onChange={(e) => setProductForm({
+                  ...productForm, 
+                  supplier: {...productForm.supplier, name: e.target.value}
+                })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Cost Price *</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={productForm.price.cost}
+                onChange={(e) => setProductForm({
+                  ...productForm, 
+                  price: {...productForm.price, cost: parseFloat(e.target.value) || 0}
+                })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Selling Price *</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={productForm.price.selling}
+                onChange={(e) => setProductForm({
+                  ...productForm, 
+                  price: {...productForm.price, selling: parseFloat(e.target.value) || 0}
+                })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Min Stock Level</label>
+              <input
+                type="number"
+                min="0"
+                value={productForm.thresholds.min}
+                onChange={(e) => setProductForm({
+                  ...productForm, 
+                  thresholds: {...productForm.thresholds, min: parseInt(e.target.value) || 0}
+                })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Max Stock Level</label>
+              <input
+                type="number"
+                min="0"
+                value={productForm.thresholds.max}
+                onChange={(e) => setProductForm({
+                  ...productForm, 
+                  thresholds: {...productForm.thresholds, max: parseInt(e.target.value) || 0}
+                })}
+                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea
+              rows="3"
+              value={productForm.description}
+              onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+              className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+            />
+          </div>
+          
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : (isEdit ? 'Update Product' : 'Add Product')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 
   return (
@@ -159,7 +488,10 @@ const InventoryManagement = () => {
               <h1 className="ml-3 text-2xl font-bold text-gray-900">AI Inventory Manager</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center">
+              <button 
+                onClick={() => setShowAddProduct(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Product
               </button>
@@ -167,6 +499,15 @@ const InventoryManagement = () => {
           </div>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -225,7 +566,9 @@ const InventoryManagement = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Products</p>
-                    <p className="text-2xl font-semibold text-gray-900">{inventoryData.length}</p>
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {dashboardStats.totalProducts || products.length}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -237,7 +580,7 @@ const InventoryManagement = () => {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">In Stock</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {inventoryData.filter(item => item.status === 'In Stock').length}
+                      {dashboardStats.inStock || products.filter(p => p.status === 'In Stock').length}
                     </p>
                   </div>
                 </div>
@@ -250,7 +593,7 @@ const InventoryManagement = () => {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Low Stock</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {inventoryData.filter(item => item.status === 'Low Stock').length}
+                      {dashboardStats.lowStock || products.filter(p => p.status === 'Low Stock').length}
                     </p>
                   </div>
                 </div>
@@ -263,12 +606,22 @@ const InventoryManagement = () => {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Critical</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {inventoryData.filter(item => item.status === 'Critical').length}
+                      {dashboardStats.critical || products.filter(p => p.status === 'Critical').length}
                     </p>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Loading State */}
+            {loading && (
+              <div className="text-center py-4">
+                <div className="inline-flex items-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span className="ml-2">Loading products...</span>
+                </div>
+              </div>
+            )}
 
             {/* Inventory Table */}
             <div className="bg-white shadow-sm rounded-lg overflow-hidden">
@@ -303,57 +656,81 @@ const InventoryManagement = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredInventory.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
+                    {filteredProducts.map((product) => (
+                      <tr key={product._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                            <div className="text-sm text-gray-500">{item.category}</div>
+                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                            <div className="text-sm text-gray-500">
+                              {product.category?.name || 'No Category'}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {item.sku}
+                          {product.sku}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">
-                            {item.currentStock} / {item.maxStock}
+                            {product.currentStock} / {product.thresholds?.max || 'N/A'}
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                             <div
                               className={`h-2 rounded-full ${
-                                item.currentStock <= item.minStock ? 'bg-red-600' :
-                                item.currentStock <= item.minStock * 1.5 ? 'bg-yellow-500' : 'bg-green-600'
+                                product.currentStock <= (product.thresholds?.criticalLevel || 0) ? 'bg-red-600' :
+                                product.currentStock <= (product.thresholds?.min || 0) ? 'bg-yellow-500' : 'bg-green-600'
                               }`}
-                              style={{ width: `${(item.currentStock / item.maxStock) * 100}%` }}
+                              style={{ 
+                                width: `${Math.min((product.currentStock / (product.thresholds?.max || 100)) * 100, 100)}%` 
+                              }}
                             ></div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(item.status)}`}>
-                            {item.status}
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(product.status)}`}>
+                            {product.status}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            {getVelocityIcon(item.velocity)}
-                            <span className="ml-2 text-sm text-gray-900">{item.velocity}</span>
+                            {getVelocityIcon(product.velocity)}
+                            <span className="ml-2 text-sm text-gray-900">{product.velocity}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${item.price}
+                          ${product.price?.selling || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button
-                            onClick={() => setSelectedProduct(item)}
-                            className="text-blue-600 hover:text-blue-900 mr-3"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => setSelectedProduct(product)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteProduct(product._id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {filteredProducts.length === 0 && !loading && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p>No products found. {searchTerm ? 'Try adjusting your search.' : 'Add your first product to get started.'}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -362,69 +739,56 @@ const InventoryManagement = () => {
         {/* AI Predictions Tab */}
         {activeTab === 'predictions' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-medium text-gray-900">Demand Prediction Analysis</h3>
-                <select 
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  value={selectedProduct?.id || ''}
-                  onChange={(e) => setSelectedProduct(inventoryData.find(item => item.id === parseInt(e.target.value)))}
-                >
-                  <option value="">Select Product</option>
-                  {inventoryData.map(item => (
-                    <option key={item.id} value={item.id}>{item.name}</option>
-                  ))}
-                </select>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-md font-medium text-gray-800 mb-4">AI Predictions Coming Soon</h4>
+                <div className="bg-gray-100 p-8 rounded-lg text-center">
+                  <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">AI demand prediction features will be available once you have sufficient transaction data.</p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-md font-medium text-gray-800 mb-4">Historical vs Predicted Demand</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={demandPredictionData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="actual" stroke="#3B82F6" strokeWidth={2} name="Actual" />
-                      <Line type="monotone" dataKey="predicted" stroke="#EF4444" strokeWidth={2} strokeDasharray="5 5" name="Predicted" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-md font-medium text-gray-800">AI Predictions Summary</h4>
-                  {inventoryData.slice(0, 3).map((item) => (
-                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium text-gray-900">{item.name}</h5>
-                          <p className="text-sm text-gray-600">Current Stock: {item.currentStock}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-semibold text-blue-600">
-                            {item.prediction.nextMonth}
-                          </p>
-                          <p className="text-xs text-gray-500">Predicted Next Month</p>
-                          <p className="text-xs text-green-600">{item.prediction.confidence}% Confidence</p>
-                        </div>
+              <div className="space-y-4">
+                <h4 className="text-md font-medium text-gray-800">Current Product Metrics</h4>
+                {products.slice(0, 3).map((product) => (
+                  <div key={product._id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h5 className="font-medium text-gray-900">{product.name}</h5>
+                        <p className="text-sm text-gray-600">Current Stock: {product.currentStock}</p>
+                        <p className="text-sm text-gray-600">Velocity: {product.velocity || 'Medium'}</p>
                       </div>
-                      <div className="mt-3">
-                        <div className="flex justify-between text-sm text-gray-600 mb-1">
-                          <span>Prediction Accuracy</span>
-                          <span>{item.prediction.confidence}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${item.prediction.confidence}%` }}
-                          ></div>
-                        </div>
+                      <div className="text-right">
+                        <p className="text-lg font-semibold text-blue-600">
+                          ${product.price?.selling || 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500">Selling Price</p>
+                        <p className="text-xs text-green-600">Status: {product.status}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-3">
+                      <div className="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Stock Level</span>
+                        <span>{Math.round((product.currentStock / (product.thresholds?.max || 100)) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${
+                            product.currentStock <= (product.thresholds?.criticalLevel || 0) ? 'bg-red-600' :
+                            product.currentStock <= (product.thresholds?.min || 0) ? 'bg-yellow-500' : 'bg-green-600'
+                          }`}
+                          style={{ width: `${Math.min((product.currentStock / (product.thresholds?.max || 100)) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {products.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p>Add products to see prediction analytics</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -452,77 +816,201 @@ const InventoryManagement = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {imoData.map((category, index) => (
-                <div key={index} className="bg-white rounded-lg p-6 shadow-sm">
-                  <h4 className="text-md font-medium text-gray-900 mb-4">{category.category}</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Turnover Rate</span>
-                      <span className="text-sm font-medium">{category.turnoverRate}x</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Avg Days in Stock</span>
-                      <span className="text-sm font-medium">{category.avgDaysInStock} days</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Total Value</span>
-                      <span className="text-sm font-medium">${category.value.toLocaleString()}</span>
-                    </div>
-                    <div className="pt-2">
-                      <div className="flex justify-between text-xs text-gray-500 mb-1">
-                        <span>Optimization Score</span>
-                        <span>{Math.round(category.turnoverRate * 10)}%</span>
+            {imoData.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {imoData.map((category, index) => (
+                    <div key={index} className="bg-white rounded-lg p-6 shadow-sm">
+                      <h4 className="text-md font-medium text-gray-900 mb-4">{category.category}</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Turnover Rate</span>
+                          <span className="text-sm font-medium">{category.turnoverRate}x</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Avg Days in Stock</span>
+                          <span className="text-sm font-medium">{category.avgDaysInStock} days</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Total Value</span>
+                          <span className="text-sm font-medium">${category.value?.toLocaleString() || 'N/A'}</span>
+                        </div>
+                        <div className="pt-2">
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Optimization Score</span>
+                            <span>{category.optimizationScore || 0}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${
+                                (category.optimizationScore || 0) > 80 ? 'bg-green-500' :
+                                (category.optimizationScore || 0) > 50 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.min(category.optimizationScore || 0, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            category.turnoverRate > 8 ? 'bg-green-500' :
-                            category.turnoverRate > 5 ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${Math.min(category.turnoverRate * 10, 100)}%` }}
-                        ></div>
-                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h4 className="text-md font-medium text-gray-900 mb-4">Monthly Performance Comparison</h4>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={imoData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="turnoverRate" fill="#3B82F6" name="Turnover Rate" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+                <div className="bg-white rounded-lg p-6 shadow-sm">
+                  <h4 className="text-md font-medium text-gray-900 mb-4">Category Performance</h4>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={imoData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="category" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="turnoverRate" fill="#3B82F6" name="Turnover Rate" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-lg p-6 shadow-sm">
+                <div className="text-center py-8">
+                  <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">No IMO Data Available</h4>
+                  <p className="text-gray-600">IMO analysis will be available once you have products and transaction data.</p>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h4 className="text-md font-medium text-gray-900 mb-4">AI Recommendations</h4>
               <div className="space-y-4">
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h5 className="font-medium text-gray-900">Electronics Category</h5>
-                  <p className="text-sm text-gray-600">High turnover rate detected. Consider increasing stock levels by 15% to meet demand.</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h5 className="font-medium text-gray-900">Furniture Category</h5>
-                  <p className="text-sm text-gray-600">Low turnover rate. Implement promotional strategies or reduce order quantities.</p>
-                </div>
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h5 className="font-medium text-gray-900">Office Supplies</h5>
-                  <p className="text-sm text-gray-600">Optimal performance. Maintain current inventory levels and ordering patterns.</p>
-                </div>
+                {products.length > 0 ? (
+                  <>
+                    {products.filter(p => p.status === 'Critical' || p.status === 'Low Stock').length > 0 && (
+                      <div className="border-l-4 border-red-500 pl-4">
+                        <h5 className="font-medium text-gray-900">Urgent Action Required</h5>
+                        <p className="text-sm text-gray-600">
+                          {products.filter(p => p.status === 'Critical' || p.status === 'Low Stock').length} products need immediate restocking.
+                        </p>
+                      </div>
+                    )}
+                    {products.filter(p => p.velocity === 'High').length > 0 && (
+                      <div className="border-l-4 border-blue-500 pl-4">
+                        <h5 className="font-medium text-gray-900">High Velocity Items</h5>
+                        <p className="text-sm text-gray-600">
+                          Monitor {products.filter(p => p.velocity === 'High').length} high-velocity products for potential stock increases.
+                        </p>
+                      </div>
+                    )}
+                    <div className="border-l-4 border-green-500 pl-4">
+                      <h5 className="font-medium text-gray-900">Overall Status</h5>
+                      <p className="text-sm text-gray-600">
+                        You have {products.length} products in your inventory. Keep monitoring stock levels for optimal performance.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    Add products to see personalized recommendations.
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Add Product Modal */}
+      {showAddProduct && (
+        <ProductForm
+          onSubmit={addProduct}
+          onClose={() => {
+            setShowAddProduct(false);
+            resetProductForm();
+          }}
+        />
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditProduct && editingProduct && (
+        <ProductForm
+          isEdit={true}
+          onSubmit={(formData) => updateProduct(editingProduct._id, formData)}
+          onClose={() => {
+            setShowEditProduct(false);
+            setEditingProduct(null);
+            resetProductForm();
+          }}
+        />
+      )}
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Product Details</h3>
+              <button 
+                onClick={() => setSelectedProduct(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium text-gray-900">{selectedProduct.name}</h4>
+                  <p className="text-sm text-gray-600">SKU: {selectedProduct.sku}</p>
+                  <p className="text-sm text-gray-600">Category: {selectedProduct.category?.name || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedProduct.status)}`}>
+                    {selectedProduct.status}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Current Stock</p>
+                  <p className="text-lg font-semibold">{selectedProduct.currentStock}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Selling Price</p>
+                  <p className="text-lg font-semibold">${selectedProduct.price?.selling || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Supplier</p>
+                  <p className="text-sm">{selectedProduct.supplier?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Velocity</p>
+                  <div className="flex items-center">
+                    {getVelocityIcon(selectedProduct.velocity)}
+                    <span className="ml-2 text-sm">{selectedProduct.velocity}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {selectedProduct.description && (
+                <div>
+                  <p className="text-sm text-gray-600">Description</p>
+                  <p className="text-sm">{selectedProduct.description}</p>
+                </div>
+              )}
+              
+              <div className="pt-4">
+                <button
+                  onClick={() => setSelectedProduct(null)}
+                  className="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
