@@ -1,4 +1,5 @@
 // src/components/common/LoadingSpinner.jsx
+import React from 'react';
 const LoadingSpinner = () => {
   return (
     <div className="text-center py-4">
@@ -10,4 +11,4 @@ const LoadingSpinner = () => {
   );
 };
 
-export default { LoadingSpinner };
+export default LoadingSpinner ;

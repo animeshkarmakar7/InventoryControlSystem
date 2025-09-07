@@ -12,6 +12,7 @@ const ProductForm = ({
 }) => {
   const [formData, setFormData] = useState({
     name: '',
+    sku: '', // Changed from barcode to sku
     category: '',
     description: '',
     currentStock: 0,
@@ -33,7 +34,6 @@ const ProductForm = ({
       },
       leadTime: 7
     },
-    barcode: '',
     location: {
       warehouse: '',
       shelf: '',
@@ -41,26 +41,14 @@ const ProductForm = ({
     }
   });
 
-  // Default categories if none provided
-  const defaultCategories = [
-    { _id: '1', name: 'Electronics' },
-    { _id: '2', name: 'Clothing' },
-    { _id: '3', name: 'Home & Garden' },
-    { _id: '4', name: 'Sports & Outdoors' },
-    { _id: '5', name: 'Books & Media' },
-    { _id: '6', name: 'Food & Beverages' },
-    { _id: '7', name: 'Health & Beauty' },
-    { _id: '8', name: 'Automotive' },
-    { _id: '9', name: 'Office Supplies' },
-    { _id: '10', name: 'Toys & Games' }
-  ];
-
-  const availableCategories = categories.length > 0 ? categories : defaultCategories;
+  // Use provided categories or empty array
+  const availableCategories = categories || [];
 
   useEffect(() => {
     if (isEdit && product) {
       setFormData({
         name: product.name || '',
+        sku: product.sku || '', // Changed from barcode to sku
         category: product.category?._id || product.category || '',
         description: product.description || '',
         currentStock: product.currentStock || 0,
@@ -82,7 +70,6 @@ const ProductForm = ({
           },
           leadTime: product.supplier?.leadTime || 7
         },
-        barcode: product.barcode || '',
         location: {
           warehouse: product.location?.warehouse || '',
           shelf: product.location?.shelf || '',
@@ -134,7 +121,25 @@ const ProductForm = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Validate required fields
+    if (!formData.name || !formData.category || !formData.sku) {
+      alert('Please fill in all required fields (Name, SKU, Category)');
+      return;
+    }
+    
+    if (availableCategories.length === 0) {
+      alert('No categories available. Please add categories first.');
+      return;
+    }
+    
+    // Ensure SKU is uppercase and trimmed (to match backend validation)
+    const submissionData = {
+      ...formData,
+      sku: formData.sku.trim().toUpperCase()
+    };
+    
+    onSubmit(submissionData);
   };
 
   return (
@@ -173,6 +178,25 @@ const ProductForm = ({
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SKU * 
+                  <span className="text-xs text-gray-500">(Stock Keeping Unit)</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.sku}
+                  onChange={(e) => handleInputChange('sku', e.target.value)}
+                  className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., ELC-0001, SHIRT-RED-M"
+                  style={{ textTransform: 'uppercase' }}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Will be automatically converted to uppercase. Must be unique.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Category *
                 </label>
                 <select
@@ -181,13 +205,20 @@ const ProductForm = ({
                   onChange={(e) => handleInputChange('category', e.target.value)}
                   className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">Select Category</option>
+                  <option value="">
+                    {availableCategories.length === 0 ? 'No categories available' : 'Select Category'}
+                  </option>
                   {availableCategories.map(cat => (
                     <option key={cat._id} value={cat._id}>
                       {cat.name}
                     </option>
                   ))}
                 </select>
+                {availableCategories.length === 0 && (
+                  <p className="text-sm text-red-600 mt-1">
+                    No categories found. Categories will be created automatically when the app initializes.
+                  </p>
+                )}
               </div>
               
               <div>
@@ -202,19 +233,6 @@ const ProductForm = ({
                   onChange={(e) => handleInputChange('currentStock', parseInt(e.target.value) || 0)}
                   className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Barcode/SKU
-                </label>
-                <input
-                  type="text"
-                  value={formData.barcode}
-                  onChange={(e) => handleInputChange('barcode', e.target.value)}
-                  className="block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter barcode or SKU"
                 />
               </div>
             </div>

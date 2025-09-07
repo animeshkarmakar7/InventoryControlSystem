@@ -62,4 +62,4 @@ const PredictionsTab = ({ products }) => {
 };
 
 
-export default  PredictionsTab ;
+export default PredictionsTab ;

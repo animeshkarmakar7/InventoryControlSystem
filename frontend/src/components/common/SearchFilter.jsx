@@ -1,4 +1,5 @@
 // src/components/common/SearchFilter.jsx
+import React from 'react';
 import { Search, Filter } from 'lucide-react';
 
 const SearchFilter = ({ searchTerm, setSearchTerm }) => {
@@ -22,4 +23,4 @@ const SearchFilter = ({ searchTerm, setSearchTerm }) => {
   );
 };
 
-export default { SearchFilter };
+export default SearchFilter ;

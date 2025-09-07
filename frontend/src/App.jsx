@@ -24,11 +24,60 @@ const App = () => {
   const [imoData, setImoData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [initializing, setInitializing] = useState(false);
   
   // Modal states
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showEditProduct, setShowEditProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // Default categories to create if none exist
+  const defaultCategories = [
+    { name: 'Electronics', code: 'ELC', description: 'Electronic devices and accessories' },
+    { name: 'Clothing', code: 'CLT', description: 'Clothing and apparel items' },
+    { name: 'Home & Garden', code: 'H&G', description: 'Home and garden products' },
+    { name: 'Sports', code: 'SPT', description: 'Sports and outdoor equipment' },
+    { name: 'Books', code: 'BOK', description: 'Books and media items' },
+    { name: 'Food', code: 'FOD', description: 'Food and beverage products' },
+    { name: 'Health', code: 'HTH', description: 'Health and beauty products' },
+    { name: 'Automotive', code: 'AUT', description: 'Automotive parts and accessories' },
+    { name: 'Office', code: 'OFF', description: 'Office supplies and equipment' },
+    { name: 'Toys', code: 'TOY', description: 'Toys and games' }
+  ];
+
+  // Initialize categories if none exist
+  const initializeCategories = async () => {
+    try {
+      setInitializing(true);
+      const existingCategories = await apiService.getCategories();
+      
+      if (existingCategories.length === 0) {
+        console.log('No categories found, creating default categories...');
+        
+        const createdCategories = [];
+        for (const category of defaultCategories) {
+          try {
+            const createdCategory = await apiService.createCategory(category);
+            createdCategories.push(createdCategory);
+            console.log(`Created category: ${category.name}`);
+          } catch (error) {
+            console.error(`Failed to create category ${category.name}:`, error);
+          }
+        }
+        
+        setCategories(createdCategories);
+        console.log(`Successfully created ${createdCategories.length} categories`);
+      } else {
+        setCategories(existingCategories);
+        console.log(`Loaded ${existingCategories.length} existing categories`);
+      }
+    } catch (error) {
+      console.error('Error initializing categories:', error);
+      setError('Failed to initialize categories');
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   // API functions
   const fetchProducts = async () => {
@@ -128,10 +177,19 @@ const App = () => {
 
   // Load data on component mount
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-    fetchDashboardStats();
-    fetchIMOData();
+    const initializeApp = async () => {
+      // First initialize categories
+      await initializeCategories();
+      
+      // Then load other data
+      await Promise.all([
+        fetchProducts(),
+        fetchDashboardStats(),
+        fetchIMOData()
+      ]);
+    };
+
+    initializeApp();
   }, []);
 
   const filteredProducts = products.filter(product =>
@@ -139,6 +197,19 @@ const App = () => {
     product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Show initialization message
+  if (initializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Initializing Application</h2>
+          <p className="text-gray-600">Setting up categories and loading data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,6 +221,26 @@ const App = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading && <LoadingSpinner />}
+        
+        {/* Show categories status */}
+        {categories.length === 0 && !initializing && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">Categories Not Available</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>No product categories were found. You can still add products, but categories help organize your inventory better.</p>
+                  <button
+                    onClick={initializeCategories}
+                    className="mt-2 bg-yellow-600 text-white px-3 py-1 rounded text-xs hover:bg-yellow-700"
+                  >
+                    Create Default Categories
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {activeTab === 'inventory' && (
           <InventoryTab

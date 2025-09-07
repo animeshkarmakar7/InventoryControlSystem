@@ -55,4 +55,4 @@ const StatsCards = ({ stats, products }) => {
 
 
 
-export default { StatsCards };
+export default StatsCards ;

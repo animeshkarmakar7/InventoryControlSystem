@@ -140,4 +140,4 @@ const ProductTable = ({ products, onEdit, onDelete, onView, loading }) => {
   );
 };
 
-export default { ProductTable };
+export default ProductTable ;
